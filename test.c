@@ -1,17 +1,26 @@
-#include <fcntl.h>
-#include <unistd.h>
+//
+// Created by gcha792 on 10/21/25.
+//
+
 #include <stdio.h>
+#include <pthread.h>
+
+void* my_thread_func(void* arg) {
+    printf("Hello from thread!\n");
+    return NULL;
+}
 
 int main() {
-    int fd = open("test.txt", O_WRONLY | O_CREAT, 0644);
-    if (fd < 0) {
-        perror("open");
+    pthread_t tid;
+
+    if (pthread_create(&tid, NULL, my_thread_func, NULL) != 0) {
+        perror("pthread_create failed");
         return 1;
     }
 
-    const char *text = "Hello, file system!\n";
-    write(fd, text, 21);
-    close(fd);
+    pthread_join(tid, NULL);
+    printf("Thread finished.\n");
 
     return 0;
 }
+
