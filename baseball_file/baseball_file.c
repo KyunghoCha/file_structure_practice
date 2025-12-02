@@ -4,84 +4,62 @@
 
 #include <stdio.h>
 #include <string.h>
-#include <stdarg.h>
+#include <stdlib.h>
 
-typedef enum {
-    READ,
-    WRITE, // 鞘夸?
-    ADD,
-    REMOVE,
-    SEARCH,
-    MERGE,
-    MODE_NUM
-} Mode;
+#include "baseball_file.h"
+#include "baseball_func.h"
 
-void resolve_mode(int argc, const char *mode);
-void handle_error(const char *, ...);
+int main(int argc, const char **argv) {
+            printf("%s", get_usage());
+    // get program name from the location
+    const char *prog = argv[0];
+    const char *slash = strrchr(argv[0], '/');
+    if (slash) prog = slash + 1;
 
-int main(int argc, char **argv) {
-    resolve_mode(argc, argv[1]);
-    if (argc < 2) {
-        handle_error("usage: baseball_file [read|add|remove|search|merge] <filename> <data> ...\n");
+    if (argc < 2) handle_error("Error: missing operation.\nTry '%s --help' for more information.\n", prog);
+
+    int mode = resolve_mode(argc, argv[1]);
+
+    // call function by the mode
+    switch (mode) {
+        case READ:
+            if (argc != 3) handle_error("%s", get_cmd_usage(prog, "--read <filename>"));
+            read_file(argv[2]);
+            break;
+        case WRITE:
+            if (argc != 3) handle_error("%s", get_cmd_usage(prog, "--write <filename>"));
+            write_file(argv[2]);
+            break;
+        case ADD:
+            if (argc < 4) handle_error("%s", get_cmd_usage(prog, "--add <filename> <player>"));
+            add_data(argv[2], argv[3]);
+            break;
+        case DELETE:
+            if (argc != 4) handle_error("%s", get_cmd_usage(prog, "--delete <filename> <player>"));
+            delete_data(argv[2], argv[3]);
+            break;
+        case SEARCH:
+            if (argc != 4) handle_error("%s", get_cmd_usage(prog, "--search <filename> <player>"));
+            search_data(argv[2], argv[3]);
+            break;
+        case EDIT:
+            if (argc < 4) handle_error("%s", get_cmd_usage(prog, "--edit <filename> <player>"));
+            edit_data(argv[2], argv[3]);
+            break;
+        case MERGE:
+            if (argc < 5) handle_error("%s", get_cmd_usage(prog, "--merge <output_file> <input_file1> <input_file2> ..."));
+            merge_files(argc, argv);
+            break;
+        case HELP:
+            printf("%s", get_usage());
+            break;
+        default:
+            handle_error(
+                "Error: unknown mode '%s'.\n"
+                "Try '%s --help' for more information.\n",
+                argv[1], argv[0]
+            );
     }
 
-    if (strcmp(argv[1], "READ") == 0) {
-        if (argc != 3) {
-            handle_error("usage: baseball_file [read] <filename>\n");
-        }
-        // READ 贸府 内靛 眠啊
-
-    } else if (strcmp(argv[1], "WRITE") == 0) {
-        // WRITE 贸府 内靛 眠啊
-
-    } else if (strcmp(argv[1], "ADD") == 0) {
-        if (argc != 4) {
-            handle_error("usage: baseball_file [add] <filename> <data> ...\n");
-        }
-        // ADD 贸府 内靛 眠啊
-
-    } else if (strcmp(argv[1], "REMOVE") == 0) {
-        if (argc != 4) {
-            handle_error("usage: baseball_file [remove] <filename> <data>\n");
-        }
-        // REMOVE 贸府 内靛 眠啊
-
-    } else if (strcmp(argv[1], "SEARCH") == 0) {
-        if (argc != 4) {
-            handle_error("usage: baseball_file [search] <filename> <data>\n");
-        }
-        // SEARCH 贸府 内靛 眠啊
-
-    } else if (strcmp(argv[1], "MERGE") == 0) {
-        if (argc != 4) {
-            handle_error("usage: baseball_file [merge] <master_file> <add_file>\n");
-        }
-        // MERGE 贸府 内靛 眠啊
-
-    } else {
-        handle_error("Invalid operation. Usage: baseball_file [read|add|remove|search|merge] <filename> <data> ...\n");
-    }
-    if (mode == READ) {
-        if (argc != 2) handle_error("usage: baseball_file [READ] <file>");
-    }
-    if (argc != 4) {
-        if (mode == READ)
-        else if (mode == MERGE) handle_error("usage: baseball_file <mode> <master_file> <add_file>");
-    }
-
-
-    FILE *file = fopen(argv[1], "rb");
-
-    printf("ckh:\n");
-
-    return 0;
-}
-
-void handle_error(const char *fmt, ...) {
-    va_list ap;
-    va_start(ap, fmt);
-
-    vfprintf(stderr, fmt, ap);
-
-    va_end(ap);
+    return EXIT_SUCCESS;
 }
