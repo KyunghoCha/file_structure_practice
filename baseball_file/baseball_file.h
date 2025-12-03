@@ -17,12 +17,12 @@ typedef enum {
     MODE_NUM
 } Mode;
 
-#define BUCKET_NUM 5
+#define BUCKET_NUM 5   // 임시
 #define NAME_LEN   64
 
 typedef struct {
     int header_size;
-    int bucket_head[BUCKET_NUM];
+    int bucket_head[];
 }FileHeader, *pFileHeader;
 
 typedef struct {
