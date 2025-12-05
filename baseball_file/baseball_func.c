@@ -262,11 +262,14 @@ void resize_file(const char *filename) {
         if (i == 1000) handle_error("Fatal Error can't make more tmp file.");
     }
 
+    // write header to tmp_file
     FileHeader header;
     read_header(old_file, &header);
     header.bucket_num *= 2;
     update_header(tmp_file, &header);
 
+    // write new bucket_table_head to tmp_file
+    // TODO old_file의 모든 레코드를 새 버킷 갯수를 기준으로 재 해싱하여 새 임시 파일 만들기
 }
 
 void read_header(FILE *file, FileHeader *header) {
