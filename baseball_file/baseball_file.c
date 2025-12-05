@@ -15,8 +15,8 @@ int main(int argc, const char **argv) {
     setlocale(LC_ALL, "");  // GPT
 
     // get program name from the location
-    const char *prog = argv[0];
-    const char *slash = strrchr(argv[0], '/');
+    const char *prog = argv[PROGRAM_NAME];
+    const char *slash = strrchr(argv[PROGRAM_NAME], '/');
     if (slash) prog = slash + 1;
 
     if (argc < 2) handle_error(
@@ -25,41 +25,41 @@ int main(int argc, const char **argv) {
         prog
     );
 
-    int mode = resolve_mode(argv[1]);
+    int mode = resolve_mode(argv[MODE]);
 
     // call function by the mode
     switch (mode) {
         case READ:
-            if (argc != 3) handle_error(get_cmd_usage(prog, "--read <filename>"));
-            read_file(argv[2]);
+            if (argc != 3) handle_error("%s", get_cmd_usage(prog, "--read <filename>"));
+            read_file(argv[FILE_NAME]);
             break;
         case CREATE:
-            if (argc != 3) handle_error(get_cmd_usage(prog, "--create <filename>"));
-            create_file(argv[2]);
+            if (argc != 3) handle_error("%s", get_cmd_usage(prog, "--create <filename>"));
+            create_file(argv[FILE_NAME]);
             break;
         case ADD:
-            if (argc != 14) {
+            if (argc != MAX_ARGC) {
                 fprintf(stderr, "format : %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
                        "Player", "Position", "Game", "Batting Avg", "Home Runs",
                        "Era", "Innings", "Wins", "Losses", "Saves", "Strike Outs");
-                handle_error(get_cmd_usage(prog, "--add <filename> <player>"));
+                handle_error("%s", get_cmd_usage(prog, "--add <filename> <player>"));
             }
             add_data(argc, argv);
             break;
         case DELETE:
-            if (argc != 4) handle_error(get_cmd_usage(prog, "--delete <filename> <player>"));
-            delete_data(argv[2], argv[3]);
+            if (argc != 4) handle_error("%s", get_cmd_usage(prog, "--delete <filename> <player>"));
+            delete_data(argv[FILE_NAME], argv[PLAYER]);
             break;
         case SEARCH:
-            if (argc != 4) handle_error(get_cmd_usage(prog, "--search <filename> <player>"));
-            search_data(argv[2], argv[3]);
+            if (argc != 4) handle_error("%s", get_cmd_usage(prog, "--search <filename> <player>"));
+            search_data(argv[FILE_NAME], argv[PLAYER]);
             break;
         case EDIT:
-            if (argc < 4) handle_error(get_cmd_usage(prog, "--edit <filename> <player>"));
-            edit_data(argv[2], argv[3]);
+            if (argc < 4) handle_error("%s", get_cmd_usage(prog, "--edit <filename> <player>"));
+            edit_data(argv[FILE_NAME], argv[PLAYER]);
             break;
         case MERGE:
-            if (argc < 5) handle_error(get_cmd_usage(prog, "--merge <output_file> <input_file1> <input_file2> ..."));
+            if (argc < 5) handle_error("%s", get_cmd_usage(prog, "--merge <output_file> <input_file1> <input_file2> ..."));
             merge_files(argc, argv);
             break;
         case HELP:
@@ -69,7 +69,7 @@ int main(int argc, const char **argv) {
             handle_error(
                 "Error: unknown mode '%s'.\n"
                 "Try '%s --help' for more information.\n",
-                argv[1], argv[0]
+                argv[MODE], argv[PROGRAM_NAME]
             );
     }
 

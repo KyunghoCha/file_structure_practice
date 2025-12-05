@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <stdarg.h>
 #include <stddef.h>
+#include <stdbool.h>
 
 #include "baseball_file.h"
 #include "baseball_func.h"
@@ -72,15 +73,15 @@ int resolve_mode(const char *mode) {
 // read & print file
 void read_file(const char *filename) {  // 파일이 길어지면 출력에 문제 생길거 같음
     FILE *file = fopen(filename, "rb");
-    if (file == NULL) handle_error("failed to open file: %s", filename);
+    if (file == NULL) handle_error("failed to open file: %s\n", filename);
 
     FileHeader file_header;
-    if (fread(&file_header, sizeof(FileHeader), 1, file) != 1) handle_error("Error reading file header");
+    if (fread(&file_header, sizeof(FileHeader), 1, file) != 1) handle_error("Error reading file header.");
 
     int bucket_num = file_header.bucket_num;
-    int *bucket_head = (int *)malloc(sizeof(int) * bucket_num);
-    if (bucket_head == NULL) handle_error("Error allocating memory for bucket_head");
-    if (fread(bucket_head, sizeof(int), bucket_num, file) != bucket_num) handle_error("Error reading file header");
+    int *bucket_table_head = (int *)malloc(sizeof(int) * bucket_num);
+    if (bucket_table_head == NULL) handle_error("Error allocating memory for bucket_head.");
+    if (fread(bucket_table_head, sizeof(int), bucket_num, file) != bucket_num) handle_error("Error reading file header.");
 
     printf("|");
     utf8_print_padded("Player", 16, 1);      // 16 column 폭, 왼쪽 정렬
@@ -109,7 +110,7 @@ void read_file(const char *filename) {  // 파일이 길어지면 출력에 문�
     }
 
     fclose(file);
-    free(bucket_head);
+    free(bucket_table_head);
 }
 
 // create new file
@@ -118,73 +119,74 @@ void create_file(const char *filename) {
 }
 
 // add new player
-void add_data(int argc, const char **argv) {
-    const char *file_name = argv[2];
-    const char *player  = argv[3];
+void add_data(const char **argv) {
+    const char *filename = argv[FILE_NAME];
+    const char *player   = argv[PLAYER];
 
     // open file
-    FILE *file = fopen(file_name, "rb+");
-    if (file == NULL) handle_error("Error fopen file");
+    FILE *file = fopen(filename, "rb+");
+    if (file == NULL) handle_error("failed to open file: %s\n", filename);
 
     // read file_header
     FileHeader file_header;
-    if (fread(&file_header, sizeof(FileHeader), 1, file) != 1) handle_error("Error fread file header");
+    read_header(file, &file_header);
 
     // get offsets of header
-    const size_t record_num_offset  = offsetof(FileHeader, record_num);
-    const size_t bucket_head_offset = offsetof(FileHeader, bucket_head);
+    const size_t record_num_offset        = offsetof(FileHeader, record_num);
+    const size_t bucket_table_head_offset = offsetof(FileHeader, bucket_table_head);
 
     // check load factor and resize
     file_header.record_num += 1;
-    int record_num = file_header.record_num;
+    const int record_num = file_header.record_num;
     int bucket_num = file_header.bucket_num;
     if (CALC_LOAD_FACTOR(record_num, bucket_num) >= LOAD_FACTOR_THRESHOLD) {
         fclose(file);
 
-        resize_file(file_name);
+        resize_file(filename);
 
-        file = fopen(file_name, "rb+");
-        if (file == NULL) handle_error("Error fopen file");
+        file = fopen(filename, "rb+");
+        if (file == NULL) handle_error("Error fopen file.");
 
-        if (fread(&file_header, sizeof(FileHeader), 1, file) != 1) handle_error("Error fread file header");
+        if (fread(&file_header, sizeof(FileHeader), 1, file) != 1) handle_error("Error fread file header.");
         bucket_num = file_header.bucket_num;
     }
     // update record_num
-    if (fseek(file, (long)record_num_offset, SEEK_SET) != 0) handle_error("Error fseek file_header record_num failed");
-    if (fwrite(&record_num, sizeof(file_header.record_num), 1, file) != 1) handle_error("Error fwrite file header");
+    if (fseek(file, (long)record_num_offset, SEEK_SET) != 0) handle_error("Error fseek file_header record_num failed.");
+    if (fwrite(&record_num, sizeof(file_header.record_num), 1, file) != 1) handle_error("Error fwrite file header.");
 
     // read bucket_head
     int old_head;
-    unsigned long hashed_name = hash_name(player) & (bucket_num - 1);  // NOTE: bucket_num is always power of two
-    long bucket_slot_pos = (long)bucket_head_offset + ((long)sizeof(file_header.bucket_head[0]) * (long)hashed_name);
-    if (fseek(file, bucket_slot_pos, SEEK_SET) != 0) handle_error("Error fseek bucket_head failed");
-    if (fread(&old_head, sizeof(old_head), 1, file) != 1) handle_error("Error fread file header next offset");
+    unsigned long bucket_idx = hash_name(player) & (bucket_num - 1);  // NOTE: bucket_num is always power of two
+    long bucket_slot_pos = (long)bucket_table_head_offset + ((long)sizeof(file_header.bucket_table_head[0]) * (long)bucket_idx);
+    if (fseek(file, bucket_slot_pos, SEEK_SET) != 0) handle_error("Error fseek bucket_head failed.");
+    if (fread(&old_head, sizeof(old_head), 1, file) != 1) handle_error("Error fread file header next offset.");
 
+    // set new record
     char *end;
     PlayerRecord player_record = { 0, };
-    strncpy(player_record.player, argv[3], NAME_LEN - 1);
-    player_record.position    = argv[4][0];
-    player_record.game        = (int)   strtol(argv[5],  &end, 10); if (*end != '\0') handle_error("Error reading player");
-    player_record.batting_avg = (float) strtod(argv[6],  &end);          if (*end != '\0') handle_error("Error reading player");
-    player_record.home_runs   = (int)   strtol(argv[7],  &end, 10); if (*end != '\0') handle_error("Error reading player");
-    player_record.era         = (float) strtod(argv[8],  &end);          if (*end != '\0') handle_error("Error reading player");
-    player_record.innings     = (float) strtod(argv[9],  &end);          if (*end != '\0') handle_error("Error reading player");
-    player_record.wins        = (int)   strtol(argv[10], &end, 10); if (*end != '\0') handle_error("Error reading player");
-    player_record.losses      = (int)   strtol(argv[11], &end, 10); if (*end != '\0') handle_error("Error reading player");
-    player_record.saves       = (int)   strtol(argv[12], &end, 10); if (*end != '\0') handle_error("Error reading player");
-    player_record.strikeouts  = (int)   strtol(argv[13], &end, 10); if (*end != '\0') handle_error("Error reading player");
+    strncpy(player_record.player, argv[PLAYER], NAME_LEN - 1);
+    player_record.position    = argv[POSITION][0];
+    player_record.game        = (int)   strtol(argv[GAME],        &end, 10); if (*end != '\0') handle_error("Error reading game.");
+    player_record.batting_avg = (float) strtod(argv[BATTING_AVG], &end);          if (*end != '\0') handle_error("Error reading batting average.");
+    player_record.home_runs   = (int)   strtol(argv[HOME_RUNS],   &end, 10); if (*end != '\0') handle_error("Error reading home runs.");
+    player_record.era         = (float) strtod(argv[ERA],         &end);          if (*end != '\0') handle_error("Error reading era.");
+    player_record.innings     = (float) strtod(argv[INNINGS],     &end);          if (*end != '\0') handle_error("Error reading innings.");
+    player_record.wins        = (int)   strtol(argv[WINS],        &end, 10); if (*end != '\0') handle_error("Error reading wins.");
+    player_record.losses      = (int)   strtol(argv[LOSSES],      &end, 10); if (*end != '\0') handle_error("Error reading losses.");
+    player_record.saves       = (int)   strtol(argv[SAVES],       &end, 10); if (*end != '\0') handle_error("Error reading saves.");
+    player_record.strikeouts  = (int)   strtol(argv[STRIKEOUTS],  &end, 10); if (*end != '\0') handle_error("Error reading strike outs.");
     player_record.next = old_head;
 
     // add new record
-    if (fseek(file, 0, SEEK_END) != 0) handle_error("Error fseek SEEK_END");
+    if (fseek(file, 0, SEEK_END) != 0) handle_error("Error fseek SEEK_END.");
     const long new_record_offset = ftell(file);
-    if (new_record_offset == -1L) handle_error("Error ftell get new record offset");
-    if (fwrite(&player_record, sizeof(player_record), 1, file) != 1) handle_error("Error fwrite player record");
+    if (new_record_offset == -1L) handle_error("Error ftell get new record offset.");
+    if (fwrite(&player_record, sizeof(player_record), 1, file) != 1) handle_error("Error fwrite player record.");
 
     // update bucket head
     const int head_value = (int)new_record_offset;
-    if (fseek(file, bucket_slot_pos, SEEK_SET) != 0) handle_error("Error fseek bucket head slot position failed");
-    if (fwrite(&head_value, sizeof(file_header.bucket_head[0]), 1, file) != 1) handle_error("Error fwrite file header next offset");
+    if (fseek(file, bucket_slot_pos, SEEK_SET) != 0) handle_error("Error fseek bucket head slot position failed.");
+    if (fwrite(&head_value, sizeof(file_header.bucket_table_head[0]), 1, file) != 1) handle_error("Error fwrite file header next offset.");
 
     fclose(file);
 }
@@ -222,6 +224,7 @@ void handle_error(const char *fmt, ...) {
 }
 
 // =====================================================================================================================
+// NOTE: bucket_num is always power of two
 unsigned long hash_name(const char *str) {
     unsigned long hash = 146527; // FNV offset basis
     while (*str) {
@@ -233,7 +236,68 @@ unsigned long hash_name(const char *str) {
 
 
 void resize_file(const char *filename) {
+    FILE *old_file = fopen(filename, "rb");
+    if (old_file == NULL) handle_error("failed to open file: %s\n", filename);
 
+    // open temp file
+    const char tmp_filename[64] = "tmp_file.bin";
+    FILE *tmp_file = fopen(tmp_filename, "rb");
+    if (tmp_file == NULL) {
+        tmp_file = fopen(tmp_filename, "wb");
+    } else {
+        char tmp_filename_num[64] = { 0, };
+        fclose(tmp_file);
+        int i = 0;
+        while (i < 1000) {
+            snprintf(tmp_filename_num, sizeof(tmp_filename_num), "%s_%03d", tmp_filename, i);
+            tmp_file = fopen(tmp_filename_num, "rb");
+            if (!tmp_file) {
+                tmp_file = fopen(tmp_filename, "wb");
+                break;
+            }
+            fclose(tmp_file);
+            i++;
+        }
+
+        if (i == 1000) handle_error("Fatal Error can't make more tmp file.");
+    }
+
+    FileHeader header;
+    read_header(old_file, &header);
+}
+
+void read_header(FILE *file, FileHeader *header) {
+    if (fseek(file, 0, SEEK_SET) != 0) handle_error("Error fseek SEEK_SET.");
+    if (fread(header, sizeof(FileHeader), 1, file) != 1) handle_error("Error fread header.");
+}
+
+void update_bucket_num(FILE *, int) {
+    if ();
+    if (fwrite(&header, sizeof(header), 1, old_file) != 1) handle_error("Error fwrite header.");
+}
+
+void update_record_num(FILE *file, int new_record_num) {
+
+}
+
+int get_bucket_slot_pos(int bucket_num, unsigned long bucket_index) {
+
+}
+
+int read_bucket_head(FILE *file, long slot_pos) {
+
+}
+
+void update_bucket_head(FILE *file, long slot_pos, long new_record_offset) {
+
+}
+
+PlayerRecord set_new_record(const char **argv) {
+
+}
+
+long append_record(FILE *file, PlayerRecord *player_record) {
+    return 0;
 }
 
 // ======================================================== GPT ========================================================

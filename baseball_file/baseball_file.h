@@ -19,7 +19,7 @@ typedef enum {
 } Mode;
 
 typedef enum {
-    PROG,
+    PROGRAM_NAME,
     MODE,
     FILE_NAME,
 
@@ -36,10 +36,9 @@ typedef enum {
     LOSSES,
     SAVES,
     STRIKEOUTS,
-    NEXT,
 
-    UNKNOWN
-} RECORD;
+    MAX_ARGC
+} RecordArg;
 
 #define LOAD_FACTOR_THRESHOLD 0.7
 #define INITIAL_BUCKET_NUM    16
@@ -51,8 +50,8 @@ typedef enum {
 typedef struct {
     int bucket_num;
     int record_num;
-    int bucket_head[];
-}FileHeader, *pFileHeader;
+    int bucket_table_head[];
+}FileHeader;
 
 typedef struct {
     char  player[NAME_LEN];  // 이름
@@ -73,6 +72,6 @@ typedef struct {
 
     // next chain
     unsigned long next;                // next chain by name hash
-} PlayerRecord, *pPlayerRecord;
+} PlayerRecord;
 
 #endif //FILE_STRUCTURE_PRACTICE_BASEBALL_FILE_H
