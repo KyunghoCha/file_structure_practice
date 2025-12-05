@@ -223,7 +223,7 @@ void handle_error(const char *fmt, ...) {
     exit(EXIT_FAILURE);
 }
 
-// =====================================================================================================================
+// ====================================================== helper =======================================================
 // NOTE: bucket_num is always power of two
 unsigned long hash_name(const char *str) {
     unsigned long hash = 146527; // FNV offset basis
@@ -262,23 +262,21 @@ void resize_file(const char *filename) {
         if (i == 1000) handle_error("Fatal Error can't make more tmp file.");
     }
 
+    FileHeader header;
+    read_header(old_file, &header);
+    header.bucket_num *= 2;
+    update_header(tmp_file, &header);
+
 }
 
 void read_header(FILE *file, FileHeader *header) {
     if (fseek(file, 0, SEEK_SET) != 0) handle_error("Error fseek SEEK_SET.");
-    if (fread(header, sizeof(FileHeader), 1, file) != 1) handle_error("Error fread header.");
+    if (fread(header, sizeof(*header), 1, file) != 1) handle_error("Error fread header.");
 }
 
-void update_bucket_num(FILE *file, int new_bucket_num) {
-    FileHeader header;
-    read_header(file, &header);
-
+void update_header(FILE *file, const FileHeader *header) {
     if (fseek(file, 0, SEEK_SET) != 0) handle_error("Error fseek SEEK_SET.");
-    if (fwrite(&header, sizeof(header), 1, old_file) != 1) handle_error("Error fwrite header.");
-}
-
-void update_record_num(FILE *file, int new_record_num) {
-
+    if (fwrite(header, sizeof(*header), 1, file) != 1) handle_error("Error fwrite header.");
 }
 
 int get_bucket_slot_pos(int bucket_num, unsigned long bucket_index) {
