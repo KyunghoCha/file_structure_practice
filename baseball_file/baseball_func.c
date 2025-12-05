@@ -73,7 +73,7 @@ int resolve_mode(const char *mode) {
 // read & print file
 void read_file(const char *filename) {  // 파일이 길어지면 출력에 문제 생길거 같음
     FILE *file = fopen(filename, "rb");
-    if (file == NULL) handle_error("failed to open file: %s\n", filename);
+    if (file == NULL) handle_error("failed to open file: %s", filename);
 
     FileHeader file_header;
     if (fread(&file_header, sizeof(FileHeader), 1, file) != 1) handle_error("Error reading file header.");
@@ -262,8 +262,6 @@ void resize_file(const char *filename) {
         if (i == 1000) handle_error("Fatal Error can't make more tmp file.");
     }
 
-    FileHeader header;
-    read_header(old_file, &header);
 }
 
 void read_header(FILE *file, FileHeader *header) {
@@ -271,8 +269,11 @@ void read_header(FILE *file, FileHeader *header) {
     if (fread(header, sizeof(FileHeader), 1, file) != 1) handle_error("Error fread header.");
 }
 
-void update_bucket_num(FILE *, int) {
-    if ();
+void update_bucket_num(FILE *file, int new_bucket_num) {
+    FileHeader header;
+    read_header(file, &header);
+
+    if (fseek(file, 0, SEEK_SET) != 0) handle_error("Error fseek SEEK_SET.");
     if (fwrite(&header, sizeof(header), 1, old_file) != 1) handle_error("Error fwrite header.");
 }
 
