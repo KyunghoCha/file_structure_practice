@@ -92,22 +92,22 @@ void read_file(const char *filename) {  // 파일이 길어지면 출력에 문�
     printf("+----------------+--------+------+-----------+----------+-------+--------+-------+-------+-------+------------+\n");
 
 
-    PlayerRecord player_record;
-    while (fread(&player_record, sizeof(PlayerRecord), 1, file) == 1) {
+    PlayerRecord p_rec;
+    while (fread(&p_rec, sizeof(PlayerRecord), 1, file) == 1) {
         printf("|");
-        utf8_print_padded(player_record.player, 16, 1);  // 이름 열
+        utf8_print_padded(p_rec.player, 16, 1);  // 이름 열
         printf("|%8c|%6d|%11.3f|%10d|%7.3f|%8.2f|%7d|%7d|%7d|%12d| %5ld\n",  // TODO test
-            player_record.position,
-            player_record.game,
-            player_record.batting_avg,
-            player_record.home_runs,
-            player_record.era,
-            player_record.innings,
-            player_record.wins,
-            player_record.losses,
-            player_record.saves,
-            player_record.strikeouts,
-            player_record.next
+            p_rec.position,
+            p_rec.game,
+            p_rec.batting_avg,
+            p_rec.home_runs,
+            p_rec.era,
+            p_rec.innings,
+            p_rec.wins,
+            p_rec.losses,
+            p_rec.saves,
+            p_rec.strikeouts,
+            p_rec.next
 
         );
     }
@@ -170,12 +170,12 @@ void add_data(const char **argv) {
     write_header(file, &file_header);
 
     unsigned long bucket_idx = hash_name(argv[PLAYER]) & (file_header.bucket_num - 1);  // NOTE: bucket_num is always power of two
-    long old_head = read_bucket_slot_head(file, (long)bucket_idx);
+    long old_head = read_bucket_slot_head(file, bucket_idx);
 
     PlayerRecord p_rec = { 0, };
-    set_new_record(argv, &p_rec, old_head);
+    set_record(argv, &p_rec, old_head);
 
-    long new_record_offset = append_new_record(file, &p_rec);
+    long new_record_offset = append_record(file, &p_rec);
 
     write_bucket_slot_head(file, (long)bucket_idx, &new_record_offset);
 
@@ -193,8 +193,40 @@ void search_data(const char *filename, const char *player) {
     if (file == NULL) handle_error("failed to open file: %s\n", filename);
 
     FileHeader file_header;
+    PlayerRecord p_rec = { 0, };
     read_header(file, &file_header);
 
+    long bucket_idx = hash_name(player) & (file_header.bucket_num - 1);
+    long next_record_offset = read_bucket_slot_head(file, bucket_idx);
+    if (next_record_offset == 0) handle_error("Error reading file header.");
+
+    int same_name_num = 0;
+    while (next_record_offset != -1) {
+        read_record(file, next_record_offset, &p_rec);
+        next_record_offset = p_rec.next;
+
+        if (strcmp(p_rec.player, player) == 0) {
+            printf("%s %c %d %.3f %d %.3f %.3f %d %d %d %d\n",
+                p_rec.player,
+                p_rec.position,
+                p_rec.game,
+                p_rec.batting_avg,
+                p_rec.home_runs,
+                p_rec.era,
+                p_rec.innings,
+                p_rec.wins,
+                p_rec.losses,
+                p_rec.saves,
+                p_rec.strikeouts
+            );
+            same_name_num += 1;
+        }
+    }
+
+    if (same_name_num == 1)
+        printf("Found 1 player.\n");
+    else
+        printf("Found %d players who have the same name.\n", same_name_num);
 
     fclose(file);
 }
@@ -285,7 +317,7 @@ void resize_file(const char *filename) {
         long prev_head = read_bucket_slot_head(tmp_file, bucket_idx);
         p_rec.next = prev_head;
 
-        long new_record_offset = append_new_record(tmp_file, &p_rec);
+        long new_record_offset = append_record(tmp_file, &p_rec);
 
         write_bucket_slot_head(tmp_file, bucket_idx, &new_record_offset);
     }
@@ -326,7 +358,7 @@ void write_bucket_slot_head(FILE *file, unsigned long bucket_index, const long *
 }
 
 // set new record
-void set_new_record(const char **argv, PlayerRecord *player, long old_head) {
+void set_record(const char **argv, PlayerRecord *player, long old_head) {
     strncpy(player->player, argv[PLAYER], NAME_LEN - 1);
     player->player[NAME_LEN - 1] = '\0';
 
@@ -346,12 +378,17 @@ void set_new_record(const char **argv, PlayerRecord *player, long old_head) {
     player->next = old_head;
 }
 
-long append_new_record(FILE *file, PlayerRecord *p_rec) {
+long append_record(FILE *file, PlayerRecord *p_rec) {
     if (fseek(file, 0, SEEK_END) != 0) handle_error("Error fseek SEEK_END.");
     long new_record_offset = ftell(file);
     if (new_record_offset < 0) handle_error("Error ftell while append.");
     if (fwrite(p_rec, sizeof(PlayerRecord), 1, file) != 1) handle_error("Error fwrite player_record.");
     return new_record_offset;
+}
+
+void read_record(FILE *file, long record_offset, PlayerRecord *p_rec) {
+    if (fseek(file, record_offset, SEEK_SET) != 0) handle_error("Error fseek SEEK_SET.");
+    if (fread(p_rec, sizeof(PlayerRecord), 1, file) != 1) handle_error("Error fread player_record.");
 }
 
 // GPT

@@ -26,8 +26,9 @@ void write_header(FILE *, const FileHeader *);
 long get_bucket_slot_offset(unsigned long);
 long read_bucket_slot_head(FILE *, unsigned long);
 void write_bucket_slot_head(FILE *, unsigned long, const long *);
-void set_new_record(const char **, PlayerRecord *, long);
-long append_new_record(FILE *, PlayerRecord *);
+void set_record(const char **, PlayerRecord *, long);
+long append_record(FILE *, PlayerRecord *);
+void read_record(FILE *, long, PlayerRecord *);
 static int parse_int(const char *);
 static float parse_float(const char *);
 

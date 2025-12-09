@@ -50,7 +50,7 @@ typedef enum {
 typedef struct {
     int bucket_num;
     int record_num;
-    int bucket_table_head[];
+    long bucket_table_head[];
 }FileHeader;
 
 typedef struct {
