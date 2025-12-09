@@ -29,7 +29,7 @@ typedef struct {
     int   saves;
     int   strikeouts;
 
-    int   next;            // 체이닝용
+    long   next;            // 체이닝용
 } PlayerRecord;
 
 int main(int argc, char **argv) {
@@ -70,9 +70,9 @@ int main(int argc, char **argv) {
     //   bucket 2: 2 (세 번째 선수)
     //   bucket 3: -1
     //   bucket 4: 1 (두 번째 선수)
-    int bucket_head[5] = { -1, 0, 2, -1, 1 };
+    long bucket_head[5] = { -1, 0, 2, -1, 1 };
 
-    if (fwrite(bucket_head, sizeof(int), bucket_num, file) != bucket_num) {
+    if (fwrite(bucket_head, sizeof(long), bucket_num, file) != bucket_num) {
         fprintf(stderr, "Error writing bucket_head\n");
         return 1;
     }
