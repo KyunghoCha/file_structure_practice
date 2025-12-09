@@ -8,8 +8,6 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdarg.h>
-#include <stddef.h>
-#include <stdbool.h>
 
 #include "baseball_file.h"
 #include "baseball_func.h"
@@ -76,13 +74,16 @@ void read_file(const char *filename) {  // 파일이 길어지면 출력에 문�
     if (file == NULL) handle_error("failed to open file: %s", filename);
 
     FileHeader file_header;
-    if (fread(&file_header, sizeof(FileHeader), 1, file) != 1) handle_error("Error reading file header.");
+    read_header(file, &file_header);
 
     int bucket_num = file_header.bucket_num;
-    int *bucket_table_head = (int *)malloc(sizeof(int) * bucket_num);
-    if (bucket_table_head == NULL) handle_error("Error allocating memory for bucket_head.");
-    if (fread(bucket_table_head, sizeof(int), bucket_num, file) != bucket_num) handle_error("Error reading file header.");
+    long *bucket_table_head = NULL;
+    if ((bucket_table_head = (long *)malloc(sizeof(long) * bucket_num)) == NULL) handle_error("Error allocating memory for bucket_head.");
+    if (fread(bucket_table_head, sizeof(long), bucket_num, file) != bucket_num) handle_error("Error reading file header.");
 
+
+    printf("%d %d\n", bucket_num, file_header.record_num); // TODO test
+    printf("+----------------+--------+------+-----------+----------+-------+--------+-------+-------+-------+------------+\n");
     printf("|");
     utf8_print_padded("Player", 16, 1);      // 16 column 폭, 왼쪽 정렬
     printf("|%8s|%6s|%11s|%10s|%7s|%8s|%7s|%7s|%7s|%12s|\n",
@@ -95,7 +96,7 @@ void read_file(const char *filename) {  // 파일이 길어지면 출력에 문�
     while (fread(&player_record, sizeof(PlayerRecord), 1, file) == 1) {
         printf("|");
         utf8_print_padded(player_record.player, 16, 1);  // 이름 열
-        printf("|%8c|%6d|%11.3f|%10d|%7.3f|%8.2f|%7d|%7d|%7d|%12d|\n",
+        printf("|%8c|%6d|%11.3f|%10d|%7.3f|%8.2f|%7d|%7d|%7d|%12d| %5ld\n",  // TODO test
             player_record.position,
             player_record.game,
             player_record.batting_avg,
@@ -105,9 +106,15 @@ void read_file(const char *filename) {  // 파일이 길어지면 출력에 문�
             player_record.wins,
             player_record.losses,
             player_record.saves,
-            player_record.strikeouts
+            player_record.strikeouts,
+            player_record.next
+
         );
     }
+    printf("+----------------+--------+------+-----------+----------+-------+--------+-------+-------+-------+------------+\n");
+    for (int i = 0; i < bucket_num; i++) { // TODO test
+        printf("%ld ", bucket_table_head[i]);
+    } printf("\n");
 
     fclose(file);
     free(bucket_table_head);
@@ -115,78 +122,62 @@ void read_file(const char *filename) {  // 파일이 길어지면 출력에 문�
 
 // create new file
 void create_file(const char *filename) {
-    handle_error("not ready...");
+    FILE *file = fopen(filename, "rb");
+    if (file != NULL) {
+        fclose(file);
+        handle_error("The file is already exist: %s", filename);
+    }
+
+    file = fopen(filename, "wb");
+
+    FileHeader file_header = {
+        .bucket_num = INITIAL_BUCKET_NUM,
+        .record_num = 0
+    };
+    long *bucket_table_head = NULL;
+    if ((bucket_table_head = (long *)malloc(sizeof(long) * INITIAL_BUCKET_NUM)) == NULL) handle_error("Error allocating memory for bucket_table_head.");
+    memset(bucket_table_head, -1, sizeof(long) * INITIAL_BUCKET_NUM);
+
+    write_header(file, &file_header);
+    if (fwrite(bucket_table_head, sizeof(long), INITIAL_BUCKET_NUM, file) != INITIAL_BUCKET_NUM) handle_error("Error writing file header.");
+
+    fclose(file);
+    free(bucket_table_head);
 }
 
 // add new player
 void add_data(const char **argv) {
     const char *filename = argv[FILE_NAME];
-    const char *player   = argv[PLAYER];
 
-    // open file
-    FILE *file = fopen(filename, "rb+");
+    FILE *file = fopen(filename, "r+b");
     if (file == NULL) handle_error("failed to open file: %s\n", filename);
 
-    // read file_header
     FileHeader file_header;
     read_header(file, &file_header);
 
-    // get offsets of header
-    const size_t record_num_offset        = offsetof(FileHeader, record_num);
-    const size_t bucket_table_head_offset = offsetof(FileHeader, bucket_table_head);
-
     // check load factor and resize
-    file_header.record_num += 1;
-    const int record_num = file_header.record_num;
-    int bucket_num = file_header.bucket_num;
-    if (CALC_LOAD_FACTOR(record_num, bucket_num) >= LOAD_FACTOR_THRESHOLD) {
+    if (CALC_LOAD_FACTOR(file_header.record_num + 1, file_header.bucket_num) >= LOAD_FACTOR_THRESHOLD) {
         fclose(file);
 
         resize_file(filename);
 
-        file = fopen(filename, "rb+");
+        file = fopen(filename, "r+b");
         if (file == NULL) handle_error("Error fopen file.");
 
-        if (fread(&file_header, sizeof(FileHeader), 1, file) != 1) handle_error("Error fread file header.");
-        bucket_num = file_header.bucket_num;
+        read_header(file, &file_header);
     }
-    // update record_num
-    if (fseek(file, (long)record_num_offset, SEEK_SET) != 0) handle_error("Error fseek file_header record_num failed.");
-    if (fwrite(&record_num, sizeof(file_header.record_num), 1, file) != 1) handle_error("Error fwrite file header.");
+    file_header.record_num += 1;
+    write_header(file, &file_header);
 
-    // read bucket_head
-    int old_head;
-    unsigned long bucket_idx = hash_name(player) & (bucket_num - 1);  // NOTE: bucket_num is always power of two
-    long bucket_slot_pos = (long)bucket_table_head_offset + ((long)sizeof(file_header.bucket_table_head[0]) * (long)bucket_idx);
-    if (fseek(file, bucket_slot_pos, SEEK_SET) != 0) handle_error("Error fseek bucket_head failed.");
-    if (fread(&old_head, sizeof(old_head), 1, file) != 1) handle_error("Error fread file header next offset.");
+    unsigned long bucket_idx = hash_name(argv[PLAYER]) & (file_header.bucket_num - 1);  // NOTE: bucket_num is always power of two
+    long old_head = read_bucket_slot_head(file, (long)bucket_idx);
 
-    // set new record
-    char *end;
-    PlayerRecord player_record = { 0, };
-    strncpy(player_record.player, argv[PLAYER], NAME_LEN - 1);
-    player_record.position    = argv[POSITION][0];
-    player_record.game        = (int)   strtol(argv[GAME],        &end, 10); if (*end != '\0') handle_error("Error reading game.");
-    player_record.batting_avg = (float) strtod(argv[BATTING_AVG], &end);          if (*end != '\0') handle_error("Error reading batting average.");
-    player_record.home_runs   = (int)   strtol(argv[HOME_RUNS],   &end, 10); if (*end != '\0') handle_error("Error reading home runs.");
-    player_record.era         = (float) strtod(argv[ERA],         &end);          if (*end != '\0') handle_error("Error reading era.");
-    player_record.innings     = (float) strtod(argv[INNINGS],     &end);          if (*end != '\0') handle_error("Error reading innings.");
-    player_record.wins        = (int)   strtol(argv[WINS],        &end, 10); if (*end != '\0') handle_error("Error reading wins.");
-    player_record.losses      = (int)   strtol(argv[LOSSES],      &end, 10); if (*end != '\0') handle_error("Error reading losses.");
-    player_record.saves       = (int)   strtol(argv[SAVES],       &end, 10); if (*end != '\0') handle_error("Error reading saves.");
-    player_record.strikeouts  = (int)   strtol(argv[STRIKEOUTS],  &end, 10); if (*end != '\0') handle_error("Error reading strike outs.");
-    player_record.next = old_head;
+    PlayerRecord p_rec = { 0, };
+    set_new_record(argv, &p_rec, old_head);
 
-    // add new record
-    if (fseek(file, 0, SEEK_END) != 0) handle_error("Error fseek SEEK_END.");
-    const long new_record_offset = ftell(file);
-    if (new_record_offset == -1L) handle_error("Error ftell get new record offset.");
-    if (fwrite(&player_record, sizeof(player_record), 1, file) != 1) handle_error("Error fwrite player record.");
+    long new_record_offset = append_new_record(file, &p_rec);
 
-    // update bucket head
-    const int head_value = (int)new_record_offset;
-    if (fseek(file, bucket_slot_pos, SEEK_SET) != 0) handle_error("Error fseek bucket head slot position failed.");
-    if (fwrite(&head_value, sizeof(file_header.bucket_table_head[0]), 1, file) != 1) handle_error("Error fwrite file header next offset.");
+    write_bucket_slot_head(file, (long)bucket_idx, &new_record_offset);
 
     fclose(file);
 }
@@ -198,7 +189,14 @@ void delete_data(const char *filename, const char *player) {
 
 // search player
 void search_data(const char *filename, const char *player) {
-    handle_error("not ready...");
+    FILE *file = fopen(filename, "rb");
+    if (file == NULL) handle_error("failed to open file: %s\n", filename);
+
+    FileHeader file_header;
+    read_header(file, &file_header);
+
+
+    fclose(file);
 }
 
 // edit player's data
@@ -223,7 +221,7 @@ void handle_error(const char *fmt, ...) {
     exit(EXIT_FAILURE);
 }
 
-// ====================================================== helper =======================================================
+// ====================================================== helper ======================================================
 // NOTE: bucket_num is always power of two
 unsigned long hash_name(const char *str) {
     unsigned long hash = 146527; // FNV offset basis
@@ -234,25 +232,24 @@ unsigned long hash_name(const char *str) {
     return hash;
 }
 
-
 void resize_file(const char *filename) {
     FILE *old_file = fopen(filename, "rb");
     if (old_file == NULL) handle_error("failed to open file: %s\n", filename);
 
     // open temp file
-    const char tmp_filename[64] = "tmp_file.bin";
+    char tmp_filename[64] = "tmp_file.bin";
     FILE *tmp_file = fopen(tmp_filename, "rb");
     if (tmp_file == NULL) {
-        tmp_file = fopen(tmp_filename, "wb");
+        tmp_file = fopen(tmp_filename, "w+b");
+        if (tmp_file == NULL) handle_error("Error opening tmp file: %s\n", tmp_filename);
     } else {
-        char tmp_filename_num[64] = { 0, };
         fclose(tmp_file);
         int i = 0;
         while (i < 1000) {
-            snprintf(tmp_filename_num, sizeof(tmp_filename_num), "%s_%03d", tmp_filename, i);
-            tmp_file = fopen(tmp_filename_num, "rb");
+            snprintf(tmp_filename, sizeof(tmp_filename), "%s_%03d", "tmp_file.bin", i);
+            tmp_file = fopen(tmp_filename, "rb");
             if (!tmp_file) {
-                tmp_file = fopen(tmp_filename, "wb");
+                tmp_file = fopen(tmp_filename, "w+b");
                 break;
             }
             fclose(tmp_file);
@@ -263,13 +260,41 @@ void resize_file(const char *filename) {
     }
 
     // write header to tmp_file
-    FileHeader header;
-    read_header(old_file, &header);
-    header.bucket_num *= 2;
-    update_header(tmp_file, &header);
+    FileHeader file_header;
+    read_header(old_file, &file_header);
+    file_header.bucket_num <<= 1;
+    write_header(tmp_file, &file_header);
+
+    long *bucket_table_head = NULL;
+    if ((bucket_table_head = (long *)malloc(sizeof(long) * file_header.bucket_num)) == NULL) handle_error("Error allocating memory for bucket_table_head.");
+    memset(bucket_table_head, -1, sizeof(long) * file_header.bucket_num);
+
+    if (fwrite(bucket_table_head, sizeof(long), file_header.bucket_num, tmp_file) != file_header.bucket_num) handle_error("Error writing file header.");
+
+    int old_bucket_num = file_header.bucket_num >> 1;
+    if (fseek(old_file, sizeof(long) * old_bucket_num, SEEK_CUR) != 0) handle_error("Error seeking to beginning of file.");
 
     // write new bucket_table_head to tmp_file
-    // TODO old_file의 모든 레코드를 새 버킷 갯수를 기준으로 재 해싱하여 새 임시 파일 만들기
+    PlayerRecord p_rec = { 0, };
+    for (int i = 0; i < file_header.record_num; i++) {
+        if (fread(&p_rec, sizeof(PlayerRecord), 1, old_file) != 1)
+            handle_error("Error reading player record.");
+
+        unsigned long bucket_idx = hash_name(p_rec.player) & (file_header.bucket_num - 1);
+
+        long prev_head = read_bucket_slot_head(tmp_file, bucket_idx);
+        p_rec.next = prev_head;
+
+        long new_record_offset = append_new_record(tmp_file, &p_rec);
+
+        write_bucket_slot_head(tmp_file, bucket_idx, &new_record_offset);
+    }
+
+    fclose(old_file);
+    fclose(tmp_file);
+    free(bucket_table_head);
+
+    if (rename(tmp_filename, filename) != 0) handle_error("Error renaming tmp file to %s\n", filename);
 }
 
 void read_header(FILE *file, FileHeader *header) {
@@ -277,54 +302,78 @@ void read_header(FILE *file, FileHeader *header) {
     if (fread(header, sizeof(*header), 1, file) != 1) handle_error("Error fread header.");
 }
 
-void update_header(FILE *file, const FileHeader *header) {
+void write_header(FILE *file, const FileHeader *header) {
     if (fseek(file, 0, SEEK_SET) != 0) handle_error("Error fseek SEEK_SET.");
     if (fwrite(header, sizeof(*header), 1, file) != 1) handle_error("Error fwrite header.");
 }
 
-int get_bucket_slot_pos(int bucket_num, unsigned long bucket_index) {
-
+long get_bucket_slot_offset(unsigned long bucket_index) {
+    return sizeof(FileHeader) + (sizeof(long) * bucket_index);
 }
 
-int read_bucket_head(FILE *file, long slot_pos) {
+long read_bucket_slot_head(FILE *file, unsigned long bucket_index) {
+    long bucket_value;
 
+    if (fseek(file, get_bucket_slot_offset(bucket_index), SEEK_SET) != 0) handle_error("Error fseek SEEK_SET.");
+    if (fread(&bucket_value, sizeof(long), 1, file) != 1) handle_error("Error fread bucket_value.");
+
+    return bucket_value;
 }
 
-void update_bucket_head(FILE *file, long slot_pos, long new_record_offset) {
-
+void write_bucket_slot_head(FILE *file, unsigned long bucket_index, const long *new_record_offset) {
+    if (fseek(file, get_bucket_slot_offset(bucket_index), SEEK_SET) != 0) handle_error("Error fseek SEEK_SET.");
+    if (fwrite(new_record_offset, sizeof(long), 1, file) != 1) handle_error("Error fwrite new_record_offset.");
 }
 
-PlayerRecord set_new_record(const char **argv) {
+// set new record
+void set_new_record(const char **argv, PlayerRecord *player, long old_head) {
+    strncpy(player->player, argv[PLAYER], NAME_LEN - 1);
+    player->player[NAME_LEN - 1] = '\0';
 
+    if (*argv[POSITION] == '\0') handle_error("Error reading position.");
+    player->position = argv[POSITION][0];
+
+    player->game        = parse_int(argv[GAME]);
+    player->batting_avg = parse_float(argv[BATTING_AVG]);
+    player->home_runs   = parse_int(argv[HOME_RUNS]);
+    player->era         = parse_float(argv[ERA]);
+    player->innings     = parse_float(argv[INNINGS]);
+    player->wins        = parse_int(argv[WINS]);
+    player->losses      = parse_int(argv[LOSSES]);
+    player->saves       = parse_int(argv[SAVES]);
+    player->strikeouts  = parse_int(argv[STRIKEOUTS]);
+
+    player->next = old_head;
 }
 
-long append_record(FILE *file, PlayerRecord *player_record) {
-    return 0;
+long append_new_record(FILE *file, PlayerRecord *p_rec) {
+    if (fseek(file, 0, SEEK_END) != 0) handle_error("Error fseek SEEK_END.");
+    long new_record_offset = ftell(file);
+    if (new_record_offset < 0) handle_error("Error ftell while append.");
+    if (fwrite(p_rec, sizeof(PlayerRecord), 1, file) != 1) handle_error("Error fwrite player_record.");
+    return new_record_offset;
 }
+
+// GPT
+static int parse_int(const char *arg) {
+    char *end;
+    long val = strtol(arg, &end, 10);
+    if (end == arg || *end != '\0') handle_error("Invalid integer input.");
+    return (int) val;
+}
+
+// GPT
+static float parse_float(const char *arg) {
+    char *end;
+    float val = strtof(arg, &end);
+    if (end == arg || *end != '\0') handle_error("Invalid float input.");
+    return val;
+}
+
 
 // ======================================================== GPT ========================================================
 #include <wchar.h>
 #include <locale.h>
-
-// UTF-8 문자열의 "터미널 폭(column width)" 계산
-static int utf8_display_width(const char *s) {
-    mbstate_t st;
-    memset(&st, 0, sizeof(st));
-
-    const char *p = s;
-    int width = 0;
-    wchar_t wc;
-    size_t len;
-
-    while ((len = mbrtowc(&wc, p, MB_CUR_MAX, &st)) > 0) {
-        int w = wcwidth(wc);
-        if (w > 0) {
-            width += w;
-        }
-        p += len;
-    }
-    return width;
-}
 
 // width(열 수, column)만큼 차도록 UTF-8 문자열 출력 + 공백 패딩
 // left_align != 0 이면 왼쪽 정렬, 0이면 오른쪽 정렬

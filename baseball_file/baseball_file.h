@@ -71,7 +71,7 @@ typedef struct {
     int   strikeouts;        // 탈삼진
 
     // next chain
-    unsigned long next;                // next chain by name hash
+    long next;                // next chain by name hash
 } PlayerRecord;
 
 #endif //FILE_STRUCTURE_PRACTICE_BASEBALL_FILE_H

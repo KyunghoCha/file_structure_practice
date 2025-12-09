@@ -39,12 +39,11 @@ int main(int argc, const char **argv) {
             break;
         case ADD:
             if (argc != MAX_ARGC) {
-                fprintf(stderr, "format : %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
-                       "Player", "Position", "Game", "Batting Avg", "Home Runs",
-                       "Era", "Innings", "Wins", "Losses", "Saves", "Strike Outs");
+                fprintf(stderr, "format : Player, Position, Game, BattingAvg, HomeRuns, Era, Innings, Wins, Losses, Saves, StrikeOuts\n");
+                fprintf(stderr, "Wrong number of arguments.: %d by %d\n", argc - 1, MAX_ARGC);
                 handle_error("%s", get_cmd_usage(prog, "--add <filename> <player>"));
             }
-            add_data(argc, argv);
+            add_data(argv);
             break;
         case DELETE:
             if (argc != 4) handle_error("%s", get_cmd_usage(prog, "--delete <filename> <player>"));

@@ -5,8 +5,6 @@
 #ifndef FILE_STRUCTURE_PRACTICE_BASEBALL_FUNC_H
 #define FILE_STRUCTURE_PRACTICE_BASEBALL_FUNC_H
 
-#include <stdbool.h>
-
 #include "baseball_file.h"
 
 char *get_prog_usage();
@@ -24,17 +22,18 @@ void merge_files(int, const char **);
 unsigned long hash_name(const char *);
 void resize_file(const char *);
 void read_header(FILE *, FileHeader *);
-void update_header(FILE *, const FileHeader *);
-int get_bucket_slot_pos(int, unsigned long);
-int read_bucket_head(FILE *, long);
-void update_bucket_head(FILE *, long, long);
-PlayerRecord set_new_record(const char **);
-long append_record(FILE *, PlayerRecord *);
+void write_header(FILE *, const FileHeader *);
+long get_bucket_slot_offset(unsigned long);
+long read_bucket_slot_head(FILE *, unsigned long);
+void write_bucket_slot_head(FILE *, unsigned long, const long *);
+void set_new_record(const char **, PlayerRecord *, long);
+long append_new_record(FILE *, PlayerRecord *);
+static int parse_int(const char *);
+static float parse_float(const char *);
 
 void handle_error(const char *, ...);
 
 // --------------------- GPT ---------------------
-static int utf8_display_width(const char *);  // 정의 유지?
 void utf8_print_padded(const char *, int, int);
 
 #endif //FILE_STRUCTURE_PRACTICE_BASEBALL_FUNC_H
