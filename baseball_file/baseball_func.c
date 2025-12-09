@@ -71,15 +71,15 @@ int resolve_mode(const char *mode) {
 // read & print file
 void read_file(const char *filename) {  // 파일이 길어지면 출력에 문제 생길거 같음
     FILE *file = fopen(filename, "rb");
-    if (file == NULL) handle_error("failed to open file: %s", filename);
+    if (file == NULL) handle_error("read_file: failed to open file '%s'", filename);
 
     FileHeader file_header;
     read_header(file, &file_header);
 
     int bucket_num = file_header.bucket_num;
     long *bucket_table_head = NULL;
-    if ((bucket_table_head = (long *)malloc(sizeof(long) * bucket_num)) == NULL) handle_error("Error allocating memory for bucket_head.");
-    if (fread(bucket_table_head, sizeof(long), bucket_num, file) != bucket_num) handle_error("Error reading file header.");
+    if ((bucket_table_head = (long *)malloc(sizeof(long) * bucket_num)) == NULL) handle_error("read_file: failed to allocate bucket_table_head for %d buckets", bucket_num);
+    if (fread(bucket_table_head, sizeof(long), bucket_num, file) != bucket_num) handle_error("read_file: failed to read bucket table (%d entries)", bucket_num);
 
 
     printf("%d %d\n", bucket_num, file_header.record_num); // TODO test
@@ -96,7 +96,7 @@ void read_file(const char *filename) {  // 파일이 길어지면 출력에 문�
     while (fread(&p_rec, sizeof(PlayerRecord), 1, file) == 1) {
         printf("|");
         utf8_print_padded(p_rec.player, 16, 1);  // 이름 열
-        printf("|%8c|%6d|%11.3f|%10d|%7.3f|%8.2f|%7d|%7d|%7d|%12d| %5ld\n",  // TODO test
+        printf("|%8c|%6d|%11.3f|%10d|%7.3f|%8.2f|%7d|%7d|%7d|%12d| %5ld\n",  // TODO print next for test
             p_rec.position,
             p_rec.game,
             p_rec.batting_avg,
@@ -112,7 +112,7 @@ void read_file(const char *filename) {  // 파일이 길어지면 출력에 문�
         );
     }
     printf("+----------------+--------+------+-----------+----------+-------+--------+-------+-------+-------+------------+\n");
-    for (int i = 0; i < bucket_num; i++) { // TODO test
+    for (int i = 0; i < bucket_num; i++) { // TODO print bucket_table_head for test
         printf("%ld ", bucket_table_head[i]);
     } printf("\n");
 
@@ -125,7 +125,7 @@ void create_file(const char *filename) {
     FILE *file = fopen(filename, "rb");
     if (file != NULL) {
         fclose(file);
-        handle_error("The file is already exist: %s", filename);
+        handle_error("create_file: file already exists: %s", filename);
     }
 
     file = fopen(filename, "wb");
@@ -135,11 +135,11 @@ void create_file(const char *filename) {
         .record_num = 0
     };
     long *bucket_table_head = NULL;
-    if ((bucket_table_head = (long *)malloc(sizeof(long) * INITIAL_BUCKET_NUM)) == NULL) handle_error("Error allocating memory for bucket_table_head.");
+    if ((bucket_table_head = (long *)malloc(sizeof(long) * INITIAL_BUCKET_NUM)) == NULL) handle_error("create_file: failed to allocate initial bucket_table_head (%d buckets)", INITIAL_BUCKET_NUM);
     memset(bucket_table_head, -1, sizeof(long) * INITIAL_BUCKET_NUM);
 
     write_header(file, &file_header);
-    if (fwrite(bucket_table_head, sizeof(long), INITIAL_BUCKET_NUM, file) != INITIAL_BUCKET_NUM) handle_error("Error writing file header.");
+    if (fwrite(bucket_table_head, sizeof(long), INITIAL_BUCKET_NUM, file) != INITIAL_BUCKET_NUM) handle_error("create_file: failed to write initial bucket table (%d buckets)", INITIAL_BUCKET_NUM);
 
     fclose(file);
     free(bucket_table_head);
@@ -150,7 +150,7 @@ void add_data(const char **argv) {
     const char *filename = argv[FILE_NAME];
 
     FILE *file = fopen(filename, "r+b");
-    if (file == NULL) handle_error("failed to open file: %s\n", filename);
+    if (file == NULL) handle_error("add_data: failed to open file '%s'", filename);
 
     FileHeader file_header;
     read_header(file, &file_header);
@@ -162,7 +162,7 @@ void add_data(const char **argv) {
         resize_file(filename);
 
         file = fopen(filename, "r+b");
-        if (file == NULL) handle_error("Error fopen file.");
+        if (file == NULL) handle_error("add_data: failed to reopen file '%s' after resize", filename);
 
         read_header(file, &file_header);
     }
@@ -177,7 +177,7 @@ void add_data(const char **argv) {
 
     long new_record_offset = append_record(file, &p_rec);
 
-    write_bucket_slot_head(file, (long)bucket_idx, &new_record_offset);
+    write_bucket_slot_head(file, bucket_idx, &new_record_offset);
 
     fclose(file);
 }
@@ -190,7 +190,7 @@ void delete_data(const char *filename, const char *player) {
 // search player
 void search_data(const char *filename, const char *player) {
     FILE *file = fopen(filename, "rb");
-    if (file == NULL) handle_error("failed to open file: %s\n", filename);
+    if (file == NULL) handle_error("search_data: failed to open file '%s'", filename);
 
     FileHeader file_header;
     PlayerRecord p_rec = { 0, };
@@ -265,14 +265,14 @@ unsigned long hash_name(const char *str) {
 
 void resize_file(const char *filename) {
     FILE *old_file = fopen(filename, "rb");
-    if (old_file == NULL) handle_error("failed to open file: %s\n", filename);
+    if (old_file == NULL) handle_error("resize_file: failed to open original file '%s'", filename);
 
     // open temp file
     char tmp_filename[64] = "tmp_file.bin";
     FILE *tmp_file = fopen(tmp_filename, "rb");
     if (tmp_file == NULL) {
         tmp_file = fopen(tmp_filename, "w+b");
-        if (tmp_file == NULL) handle_error("Error opening tmp file: %s\n", tmp_filename);
+        if (tmp_file == NULL) handle_error("resize_file: failed to create tmp file '%s'", tmp_filename);
     } else {
         fclose(tmp_file);
         int i = 0;
@@ -287,7 +287,7 @@ void resize_file(const char *filename) {
             i++;
         }
 
-        if (i == 1000) handle_error("Fatal Error can't make more tmp file.");
+        if (i == 1000) handle_error("resize_file: failed to create unique tmp file after 1000 attempts");
     }
 
     // write header to tmp_file
@@ -297,19 +297,18 @@ void resize_file(const char *filename) {
     write_header(tmp_file, &file_header);
 
     long *bucket_table_head = NULL;
-    if ((bucket_table_head = (long *)malloc(sizeof(long) * file_header.bucket_num)) == NULL) handle_error("Error allocating memory for bucket_table_head.");
+    if ((bucket_table_head = (long *)malloc(sizeof(long) * file_header.bucket_num)) == NULL) handle_error("resize_file: failed to allocate new bucket_table_head (%d buckets)", file_header.bucket_num);
     memset(bucket_table_head, -1, sizeof(long) * file_header.bucket_num);
 
-    if (fwrite(bucket_table_head, sizeof(long), file_header.bucket_num, tmp_file) != file_header.bucket_num) handle_error("Error writing file header.");
+    if (fwrite(bucket_table_head, sizeof(long), file_header.bucket_num, tmp_file) != file_header.bucket_num) handle_error("resize_file: failed to write new bucket table (%d buckets)", file_header.bucket_num);
 
     int old_bucket_num = file_header.bucket_num >> 1;
-    if (fseek(old_file, sizeof(long) * old_bucket_num, SEEK_CUR) != 0) handle_error("Error seeking to beginning of file.");
+    if (fseek(old_file, sizeof(long) * old_bucket_num, SEEK_CUR) != 0) handle_error("resize_file: failed to seek past old bucket table (%d buckets)", old_bucket_num);
 
     // write new bucket_table_head to tmp_file
     PlayerRecord p_rec = { 0, };
     for (int i = 0; i < file_header.record_num; i++) {
-        if (fread(&p_rec, sizeof(PlayerRecord), 1, old_file) != 1)
-            handle_error("Error reading player record.");
+        if (fread(&p_rec, sizeof(PlayerRecord), 1, old_file) != 1) handle_error("resize_file: failed to read old player record (index %d)", i);
 
         unsigned long bucket_idx = hash_name(p_rec.player) & (file_header.bucket_num - 1);
 
@@ -325,17 +324,17 @@ void resize_file(const char *filename) {
     fclose(tmp_file);
     free(bucket_table_head);
 
-    if (rename(tmp_filename, filename) != 0) handle_error("Error renaming tmp file to %s\n", filename);
+    if (rename(tmp_filename, filename) != 0) handle_error("resize_file: failed to rename tmp file '%s' to '%s'", tmp_filename, filename);
 }
 
 void read_header(FILE *file, FileHeader *header) {
-    if (fseek(file, 0, SEEK_SET) != 0) handle_error("Error fseek SEEK_SET.");
-    if (fread(header, sizeof(*header), 1, file) != 1) handle_error("Error fread header.");
+    if (fseek(file, 0, SEEK_SET) != 0) handle_error("read_header: fseek to beginning of file failed");
+    if (fread(header, sizeof(*header), 1, file) != 1) handle_error("read_header: failed to read FileHeader");
 }
 
 void write_header(FILE *file, const FileHeader *header) {
-    if (fseek(file, 0, SEEK_SET) != 0) handle_error("Error fseek SEEK_SET.");
-    if (fwrite(header, sizeof(*header), 1, file) != 1) handle_error("Error fwrite header.");
+    if (fseek(file, 0, SEEK_SET) != 0) handle_error("write_header: fseek to beginning of file failed");
+    if (fwrite(header, sizeof(*header), 1, file) != 1) handle_error("write_header: failed to write FileHeader");
 }
 
 long get_bucket_slot_offset(unsigned long bucket_index) {
@@ -345,15 +344,15 @@ long get_bucket_slot_offset(unsigned long bucket_index) {
 long read_bucket_slot_head(FILE *file, unsigned long bucket_index) {
     long bucket_value;
 
-    if (fseek(file, get_bucket_slot_offset(bucket_index), SEEK_SET) != 0) handle_error("Error fseek SEEK_SET.");
-    if (fread(&bucket_value, sizeof(long), 1, file) != 1) handle_error("Error fread bucket_value.");
+    if (fseek(file, get_bucket_slot_offset(bucket_index), SEEK_SET) != 0) handle_error("read_bucket_slot_head: fseek to bucket index %lu failed", bucket_index);
+    if (fread(&bucket_value, sizeof(long), 1, file) != 1) handle_error("read_bucket_slot_head: failed to read bucket head at index %lu", bucket_index);
 
     return bucket_value;
 }
 
 void write_bucket_slot_head(FILE *file, unsigned long bucket_index, const long *new_record_offset) {
-    if (fseek(file, get_bucket_slot_offset(bucket_index), SEEK_SET) != 0) handle_error("Error fseek SEEK_SET.");
-    if (fwrite(new_record_offset, sizeof(long), 1, file) != 1) handle_error("Error fwrite new_record_offset.");
+    if (fseek(file, get_bucket_slot_offset(bucket_index), SEEK_SET) != 0) handle_error("write_bucket_slot_head: fseek to bucket index %lu failed", bucket_index);
+    if (fwrite(new_record_offset, sizeof(long), 1, file) != 1) handle_error("write_bucket_slot_head: failed to write bucket head at index %lu", bucket_index);
 }
 
 // set new record
@@ -361,7 +360,7 @@ void set_record(const char **argv, PlayerRecord *player, long old_head) {
     strncpy(player->player, argv[PLAYER], NAME_LEN - 1);
     player->player[NAME_LEN - 1] = '\0';
 
-    if (*argv[POSITION] == '\0') handle_error("Error reading position.");
+    if (*argv[POSITION] == '\0') handle_error("set_record: position argument is empty");
     player->position = argv[POSITION][0];
 
     player->game        = parse_int(argv[GAME]);
@@ -378,23 +377,23 @@ void set_record(const char **argv, PlayerRecord *player, long old_head) {
 }
 
 long append_record(FILE *file, PlayerRecord *p_rec) {
-    if (fseek(file, 0, SEEK_END) != 0) handle_error("Error fseek SEEK_END.");
+    if (fseek(file, 0, SEEK_END) != 0) handle_error("append_record: fseek to end of file failed");
     long new_record_offset = ftell(file);
-    if (new_record_offset < 0) handle_error("Error ftell while append.");
-    if (fwrite(p_rec, sizeof(PlayerRecord), 1, file) != 1) handle_error("Error fwrite player_record.");
+    if (new_record_offset < 0) handle_error("append_record: ftell failed while computing new record offset");
+    if (fwrite(p_rec, sizeof(PlayerRecord), 1, file) != 1) handle_error("append_record: failed to write PlayerRecord");
     return new_record_offset;
 }
 
 void read_record(FILE *file, long record_offset, PlayerRecord *p_rec) {
-    if (fseek(file, record_offset, SEEK_SET) != 0) handle_error("Error fseek SEEK_SET.");
-    if (fread(p_rec, sizeof(PlayerRecord), 1, file) != 1) handle_error("Error fread player_record.");
+    if (fseek(file, record_offset, SEEK_SET) != 0) handle_error("read_record: fseek to record offset %ld failed", record_offset);
+    if (fread(p_rec, sizeof(PlayerRecord), 1, file) != 1) handle_error("read_record: failed to read PlayerRecord at offset %ld", record_offset);
 }
 
 // GPT
 static int parse_int(const char *arg) {
     char *end;
     long val = strtol(arg, &end, 10);
-    if (end == arg || *end != '\0') handle_error("Invalid integer input.");
+    if (end == arg || *end != '\0') handle_error("parse_int: invalid integer input '%s'", arg);
     return (int) val;
 }
 
@@ -402,7 +401,7 @@ static int parse_int(const char *arg) {
 static float parse_float(const char *arg) {
     char *end;
     float val = strtof(arg, &end);
-    if (end == arg || *end != '\0') handle_error("Invalid float input.");
+    if (end == arg || *end != '\0') handle_error("parse_float: invalid float input '%s'", arg);
     return val;
 }
 
