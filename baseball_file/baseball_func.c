@@ -198,7 +198,6 @@ void search_data(const char *filename, const char *player) {
 
     long bucket_idx = hash_name(player) & (file_header.bucket_num - 1);
     long next_record_offset = read_bucket_slot_head(file, bucket_idx);
-    if (next_record_offset == 0) handle_error("Error reading file header.");
 
     int same_name_num = 0;
     while (next_record_offset != -1) {
