@@ -5,6 +5,8 @@
 #ifndef FILE_STRUCTURE_PRACTICE_BASEBALL_FILE_H
 #define FILE_STRUCTURE_PRACTICE_BASEBALL_FILE_H
 
+#include <stdbool.h>
+
 typedef enum {
     READ,
     CREATE,
@@ -71,7 +73,10 @@ typedef struct {
     int   strikeouts;        // 탈삼진
 
     // next chain
-    long next;                // next chain by name hash
+    long next;               // next chain by name hash
+
+    // logically delete the record
+    bool is_deleted;          // delete flag
 } PlayerRecord;
 
 #endif //FILE_STRUCTURE_PRACTICE_BASEBALL_FILE_H

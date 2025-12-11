@@ -8,6 +8,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdarg.h>
+#include <stdbool.h>
 
 #include "baseball_file.h"
 #include "baseball_func.h"
@@ -96,7 +97,7 @@ void read_file(const char *filename) {  // 파일이 길어지면 출력에 문�
     while (fread(&p_rec, sizeof(PlayerRecord), 1, file) == 1) {
         printf("|");
         utf8_print_padded(p_rec.player, 16, 1);  // 이름 열
-        printf("|%8c|%6d|%11.3f|%10d|%7.3f|%8.2f|%7d|%7d|%7d|%12d| %5ld\n",  // TODO print next for test
+        printf("|%8c|%6d|%11.3f|%10d|%7.3f|%8.2f|%7d|%7d|%7d|%12d| test(next, deleted) -> %5ld %6s\n",  // TODO print next / is deleted for test
             p_rec.position,
             p_rec.game,
             p_rec.batting_avg,
@@ -107,12 +108,14 @@ void read_file(const char *filename) {  // 파일이 길어지면 출력에 문�
             p_rec.losses,
             p_rec.saves,
             p_rec.strikeouts,
-            p_rec.next
-
+            p_rec.next,
+            p_rec.is_deleted ? "TRUE" : "FALSE"
         );
     }
     printf("+----------------+--------+------+-----------+----------+-------+--------+-------+-------+-------+------------+\n");
-    for (int i = 0; i < bucket_num; i++) { // TODO print bucket_table_head for test
+
+    // TODO print bucket_table_head for test
+    for (int i = 0; i < bucket_num; i++) {
         printf("%ld ", bucket_table_head[i]);
     } printf("\n");
 
@@ -185,6 +188,12 @@ void add_data(const char **argv) {
 // remove player
 void delete_data(const char *filename, const char *player) {
     handle_error("not ready...");
+    FILE *file = fopen(filename, "r+b");
+    if (file == NULL) handle_error("delete_data: failed to open file '%s'", filename);
+
+
+
+    fclose(file);
 }
 
 // search player
@@ -309,6 +318,7 @@ void resize_file(const char *filename) {
     PlayerRecord p_rec = { 0, };
     for (int i = 0; i < file_header.record_num; i++) {
         if (fread(&p_rec, sizeof(PlayerRecord), 1, old_file) != 1) handle_error("resize_file: failed to read old player record (index %d)", i);
+        if (p_rec.is_deleted == true) continue;  // pass if the record is deleted
 
         unsigned long bucket_idx = hash_name(p_rec.player) & (file_header.bucket_num - 1);
 
@@ -356,24 +366,25 @@ void write_bucket_slot_head(FILE *file, unsigned long bucket_index, const long *
 }
 
 // set new record
-void set_record(const char **argv, PlayerRecord *player, long old_head) {
-    strncpy(player->player, argv[PLAYER], NAME_LEN - 1);
-    player->player[NAME_LEN - 1] = '\0';
+void set_record(const char **argv, PlayerRecord *p_rec, long old_head) {
+    strncpy(p_rec->player, argv[PLAYER], NAME_LEN - 1);
+    p_rec->player[NAME_LEN - 1] = '\0';
 
     if (*argv[POSITION] == '\0') handle_error("set_record: position argument is empty");
-    player->position = argv[POSITION][0];
+    p_rec->position = argv[POSITION][0];
 
-    player->game        = parse_int(argv[GAME]);
-    player->batting_avg = parse_float(argv[BATTING_AVG]);
-    player->home_runs   = parse_int(argv[HOME_RUNS]);
-    player->era         = parse_float(argv[ERA]);
-    player->innings     = parse_float(argv[INNINGS]);
-    player->wins        = parse_int(argv[WINS]);
-    player->losses      = parse_int(argv[LOSSES]);
-    player->saves       = parse_int(argv[SAVES]);
-    player->strikeouts  = parse_int(argv[STRIKEOUTS]);
+    p_rec->game        = parse_int(argv[GAME]);
+    p_rec->batting_avg = parse_float(argv[BATTING_AVG]);
+    p_rec->home_runs   = parse_int(argv[HOME_RUNS]);
+    p_rec->era         = parse_float(argv[ERA]);
+    p_rec->innings     = parse_float(argv[INNINGS]);
+    p_rec->wins        = parse_int(argv[WINS]);
+    p_rec->losses      = parse_int(argv[LOSSES]);
+    p_rec->saves       = parse_int(argv[SAVES]);
+    p_rec->strikeouts  = parse_int(argv[STRIKEOUTS]);
 
-    player->next = old_head;
+    p_rec->next = old_head;
+    p_rec->is_deleted = false;
 }
 
 long append_record(FILE *file, PlayerRecord *p_rec) {
